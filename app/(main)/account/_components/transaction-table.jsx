@@ -4,12 +4,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { categoryColors } from '@/data/categories';
 import { format } from 'date-fns';
-import { Clock, MoreHorizontal, RefreshCw } from 'lucide-react';
-import React from 'react';
+import { ChevronDown, ChevronUp, Clock, MoreHorizontal, RefreshCw, Search, Trash, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import React, { useMemo, useState } from 'react';
 
 const RECURRING_INTERVALS = {
     DAILY: "Daily",
@@ -19,12 +22,151 @@ const RECURRING_INTERVALS = {
 }
 
 const TransactionTable = ({ transactions }) => {
-    const filteredAndSortedTransactions = transactions;
-    const handleSort = () => { };
+    const router = useRouter();
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [sortConfig, setSortConfig] = useState({
+        field: "date",
+        direction: "desc",
+    });
+
+    const [searchTerm, setSearchTerm] = useState("");
+    const [typeFilter, setTypeFilter] = useState("");
+    const [recurringFilter, setRecurringFilter] = useState("");
+
+    const filteredAndSortedTransactions = useMemo(() => {
+        let result = [...transactions];
+
+        // Apply search filter
+        if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            result = result.filter((transaction) =>
+                transaction.description?.toLowerCase().includes(searchLower)
+            );
+        }
+
+        // Apply type filter
+        if (typeFilter) {
+            result = result.filter((transaction) => transaction.type === typeFilter);
+        }
+
+        // Apply recurring filter
+        if (recurringFilter) {
+            result = result.filter((transaction) => {
+                if (recurringFilter === "recurring") return transaction.isRecurring;
+                return !transaction.isRecurring;
+            });
+        }
+
+        // Apply sorting
+        result.sort((a, b) => {
+            let comparison = 0;
+
+            switch (sortConfig.field) {
+                case "date":
+                    comparison = new Date(a.date) - new Date(b.date);
+                    break;
+                case "amount":
+                    comparison = a.amount - b.amount;
+                    break;
+                case "category":
+                    comparison = a.category.localeCompare(b.category);
+                    break;
+                default:
+                    comparison = 0;
+            }
+
+            return sortConfig.direction === "asc" ? comparison : -comparison;
+        });
+
+        return result;
+
+    }, [
+        transactions, searchTerm, typeFilter, recurringFilter, sortConfig]);
+        
+    const handleSort = (field) => {
+        setSortConfig(current => ({
+            field,
+            direction:
+                current.field == field && current.direction === "asc" ? "desc" : "asc",
+        }))
+    };
+
+    const handleSelect = (id) => {
+        setSelectedIds(current =>
+            current.includes(id)
+                ? current.filter(item => item != id)
+                : [...current, id]);
+    };
+
+    const handleSelectAll = () => {
+        setSelectedIds(current =>
+            current.length === filteredAndSortedTransactions.length
+                ? []
+                : filteredAndSortedTransactions.map((t) => t.id)
+        );
+    };
+
+    const handleBulkDelete = () => { }
+
+    const handleClearFilters = () => {
+        setSearchTerm("");
+        setTypeFilter("");
+        setRecurringFilter("");
+        setSelectedIds([]);
+    }
+
     return (
         <TooltipProvider>
             <div className='space-y-4'>
                 {/* Filters */}
+                <div className='flex flex-col sm:flex-row gap-4'>
+                    <div className='relative flex-1'>
+                        <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
+                        <Input
+                            placeholder="Search Transactions..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-8" />
+                    </div>
+
+                    <div className='flex gap-2'>
+                        <Select value={typeFilter} onValueChange={setTypeFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="All Types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="INCOME">Income</SelectItem>
+                                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={recurringFilter} onValueChange={(value) => setRecurringFilter(value)}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="All Transactions" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="recurring">Recurring Only</SelectItem>
+                                    <SelectItem value="non-recurring">Non-recurring Only</SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+                        {selectedIds.length > 0 &&
+                            <div className='flex items-center gap-2'>
+                                <Button className="bg-red-500 text-white hover:bg-red-600 cursor-pointer size-sm" onClick={handleBulkDelete}>
+                                    <Trash className='h-4 w-4' />
+                                    Delete Selected ({selectedIds.length})
+                                </Button>
+                            </div>}
+                    </div>
+                    {(searchTerm || typeFilter || recurringFilter) &&
+                        (<Button variant='outline' size="icon" onClick={handleClearFilters} title="Clear Filters">
+                            <X className='h-4 w-5' />
+                        </Button>)
+                    }
+                </div>
 
                 {/* transactions table */}
                 <div className='rounded-md border'>
@@ -32,26 +174,54 @@ const TransactionTable = ({ transactions }) => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]">
-                                    <Checkbox className="border-black" />
+                                    <Checkbox className="border-black"
+                                        onCheckedChange={handleSelectAll}
+                                        checked={
+                                            selectedIds.length ===
+                                            filteredAndSortedTransactions.length &&
+                                            filteredAndSortedTransactions.length > 0
+                                        }
+                                    />
                                 </TableHead>
                                 <TableHead
                                     className="cursor-pointer"
                                     onClick={() => handleSort("date")}
                                 >
-                                    <div className='flex items-center'>Date</div>
+                                    <div className='flex items-center'>Date
+                                        {sortConfig.field === "date" &&
+                                            (sortConfig.direction === "asc" ? (
+                                                <ChevronUp className="ml-1 h-4 w-4" />
+                                            ) : (
+                                                <ChevronDown className="ml-1 h-4 w-4" />
+                                            ))}
+                                    </div>
                                 </TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead
                                     className="cursor-pointer"
                                     onClick={() => handleSort("category")}
                                 >
-                                    <div className='flex items-center'>Category</div>
+                                    <div className='flex items-center'>Category
+                                        {sortConfig.field === "category" &&
+                                            (sortConfig.direction === "asc" ? (
+                                                <ChevronUp className="ml-1 h-4 w-4" />
+                                            ) : (
+                                                <ChevronDown className="ml-1 h-4 w-4" />
+                                            ))}
+                                    </div>
                                 </TableHead>
                                 <TableHead
                                     className="cursor-pointer"
                                     onClick={() => handleSort("amount")}
                                 >
-                                    <div className='flex items-center justify-end'>Amount</div>
+                                    <div className='flex items-center justify-end'>Amount
+                                        {sortConfig.field === "amount" &&
+                                            (sortConfig.direction === "asc" ? (
+                                                <ChevronUp className="ml-1 h-4 w-4" />
+                                            ) : (
+                                                <ChevronDown className="ml-1 h-4 w-4" />
+                                            ))}
+                                    </div>
                                 </TableHead>
                                 <TableHead>Recurring</TableHead>
                                 <TableHead className="w-[50px]" />
@@ -69,7 +239,9 @@ const TransactionTable = ({ transactions }) => {
 
                                     <TableRow key={transaction.id}>
                                         <TableCell>
-                                            <Checkbox className="border-black" />
+                                            <Checkbox className="border-black" onCheckedChange={() => handleSelect(transaction.id)}
+                                                checked={selectedIds.includes(transaction.id)}
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             {format(new Date(transaction.date), "PP")}
@@ -118,9 +290,17 @@ const TransactionTable = ({ transactions }) => {
                                                     <Button variant="ghost" className="h-8 w-8 p-0" ><MoreHorizontal className='h-4 w-4' /></Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent>
-                                                        <DropdownMenuItem>Edit</DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() =>
+                                                            router.push(
+                                                                `/transaction/create?edit=${transaction.id}`
+                                                            )
+                                                        }
+                                                    >Edit</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                        <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive"
+                                                        onClick={() => deleteFn([transaction.id])}
+                                                    >Delete</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
