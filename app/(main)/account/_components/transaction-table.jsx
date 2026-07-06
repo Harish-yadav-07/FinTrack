@@ -12,11 +12,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { categoryColors } from '@/data/categories';
 import useFetch from '@/hooks/use-fetch';
 import { format } from 'date-fns';
-import { ChevronDown, ChevronUp, Clock, MoreHorizontal, RefreshCw, Search, Trash, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, MoreHorizontal, RefreshCw, Search, Trash, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarLoader } from 'react-spinners';
 import { toast } from 'sonner';
+
+const ITEMS_PER_PAGE = 10;
 
 const RECURRING_INTERVALS = {
     DAILY: "Daily",
@@ -32,6 +34,7 @@ const TransactionTable = ({ transactions }) => {
         field: "date",
         direction: "desc",
     });
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [typeFilter, setTypeFilter] = useState("");
@@ -93,6 +96,13 @@ const TransactionTable = ({ transactions }) => {
     }, [
         transactions, searchTerm, typeFilter, recurringFilter, sortConfig]);
 
+    const totalPages = Math.ceil(filteredAndSortedTransactions.length / ITEMS_PER_PAGE);
+
+    const paginatedTransactions = useMemo(() => {
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredAndSortedTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredAndSortedTransactions, currentPage]);
+
     const handleSort = (field) => {
         setSortConfig(current => ({
             field,
@@ -110,9 +120,9 @@ const TransactionTable = ({ transactions }) => {
 
     const handleSelectAll = () => {
         setSelectedIds(current =>
-            current.length === filteredAndSortedTransactions.length
+            current.length === paginatedTransactions.length
                 ? []
-                : filteredAndSortedTransactions.map((t) => t.id)
+                : paginatedTransactions.map((t) => t.id)
         );
     };
 
@@ -149,7 +159,13 @@ const TransactionTable = ({ transactions }) => {
         setTypeFilter("");
         setRecurringFilter("");
         setSelectedIds([]);
+        setCurrentPage(1);
     }
+
+    const handlePageChange = (newPage) => {
+        setCurrentPage(newPage);
+        setSelectedIds([]);
+    };
 
     return (
         <TooltipProvider>
@@ -164,12 +180,18 @@ const TransactionTable = ({ transactions }) => {
                         <Input
                             placeholder="Search Transactions..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="pl-8" />
                     </div>
 
                     <div className='flex gap-2'>
-                        <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <Select value={typeFilter} onValueChange={(value) => {
+                            setTypeFilter(value);
+                            setCurrentPage(1);
+                        }}>
                             <SelectTrigger>
                                 <SelectValue placeholder="All Types" />
                             </SelectTrigger>
@@ -181,7 +203,10 @@ const TransactionTable = ({ transactions }) => {
                             </SelectContent>
                         </Select>
 
-                        <Select value={recurringFilter} onValueChange={(value) => setRecurringFilter(value)}>
+                        <Select value={recurringFilter} onValueChange={(value) => {
+                            setRecurringFilter(value);
+                            setCurrentPage(1);
+                        }}>
                             <SelectTrigger className="w-[140px]">
                                 <SelectValue placeholder="All Transactions" />
                             </SelectTrigger>
@@ -217,8 +242,8 @@ const TransactionTable = ({ transactions }) => {
                                         onCheckedChange={handleSelectAll}
                                         checked={
                                             selectedIds.length ===
-                                            filteredAndSortedTransactions.length &&
-                                            filteredAndSortedTransactions.length > 0
+                                            paginatedTransactions.length &&
+                                            paginatedTransactions.length > 0
                                         }
                                     />
                                 </TableHead>
@@ -267,14 +292,14 @@ const TransactionTable = ({ transactions }) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredAndSortedTransactions.length === 0 ? (
+                            {paginatedTransactions.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center text-muted-foreground">
                                         No Transactions Found!
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredAndSortedTransactions.map((transaction) => (
+                                paginatedTransactions.map((transaction) => (
 
                                     <TableRow key={transaction.id}>
                                         <TableCell>
@@ -349,6 +374,31 @@ const TransactionTable = ({ transactions }) => {
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className='flex items-center justify-center gap-2'>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm">
+                            Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
             </div>
         </TooltipProvider>
     );
