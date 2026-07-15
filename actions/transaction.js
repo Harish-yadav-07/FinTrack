@@ -8,6 +8,22 @@ import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"];
+
+async function generateWithFallback(genAI, content) {
+    for (const modelName of MODELS) {
+        try {
+            const model = genAI.getGenerativeModel({ model: modelName });
+            return await model.generateContent(content);
+        } catch (error) {
+            const shouldRetryNext = error?.status === 503 || error?.status === 404;
+            if (shouldRetryNext) continue;
+            throw error;
+        }
+    }
+    throw new Error("All models unavailable, try again later");
+}
+
 const serializeAmount = (obj) => ({
     ...obj,
     amount: obj.amount.toNumber(),
@@ -117,8 +133,6 @@ function calculateNextRecurringDate(startDate, interval) {
 // Scan Receipt
 export async function scanReceipt(file) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
-
         // Convert File to ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
         // Convert ArrayBuffer to Base64
@@ -144,7 +158,7 @@ export async function scanReceipt(file) {
         If its not a recipt, return an empty object 
     `;
 
-        const result = await model.generateContent([
+        const result = await generateWithFallback(genAI, [
             {
                 inlineData: {
                     data: base64String,
@@ -157,7 +171,6 @@ export async function scanReceipt(file) {
         const response = await result.response;
         const text = response.text();
         const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-
         try {
             const data = JSON.parse(cleanedText);
             return {

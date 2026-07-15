@@ -31,6 +31,7 @@ export function ReceiptScanner({ onScanComplete }) {
       toast.success("Receipt scanned successfully");
     }
     
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanReceiptLoading, scannedData]);
 
   return (
