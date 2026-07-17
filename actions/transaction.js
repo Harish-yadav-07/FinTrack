@@ -242,8 +242,7 @@ export async function updateTransaction(id, data) {
                 ? -originalTransaction.amount.toNumber()
                 : originalTransaction.amount.toNumber();
 
-        const newBalanceChange =
-            data.type === "EXPENSE" ? -data.amount : data.amount;
+        const newBalanceChange = data.type === "EXPENSE" ? -data.amount : data.amount;
 
         const netBalanceChange = newBalanceChange - oldBalanceChange;
 
