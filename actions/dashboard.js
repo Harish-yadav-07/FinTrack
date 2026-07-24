@@ -97,3 +97,7 @@ export async function getUserAcconts() {
     const serializedAccount = accounts.map(serializeTransaction);
     return serializedAccount;
 }
+
+export async function getDashboardData() {
+    
+}
